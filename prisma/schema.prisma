@@ -1,0 +1,160 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider     = "prisma-client"
+  output       = "./generated"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  LANDLORD
+  TENANT
+}
+
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  COMMERCIAL
+  ROOM
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+}
+
+enum UnitStatus {
+  AVAILABLE
+  OCCUPIED
+}
+
+enum LeaseStatus {
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  KHALTI
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  fullName     String
+  email        String   @unique
+  phone        String?
+  password     String
+  role         UserRole
+  profileImage String?
+  isVerified   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  properties    Property[]
+  leases        Lease[]
+  notifications Notification[]
+}
+
+model Property {
+  id           Int            @id @default(autoincrement())
+  ownerId      Int
+  title        String
+  description  String?
+  propertyType PropertyType
+  address      String
+  city         String
+  state        String
+  country      String
+  postalCode   String
+  status       PropertyStatus
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  owner  User            @relation(fields: [ownerId], references: [id])
+  units  Unit[]
+  images PropertyImage[]
+}
+
+model Unit {
+  id         Int        @id @default(autoincrement())
+  propertyId Int
+  unitNumber String
+  floor      Int?
+  bedrooms   Int?
+  bathrooms  Int?
+  areaSqft   Int?
+  rent       Decimal    @db.Decimal(10, 2)
+  status     UnitStatus
+  createdAt  DateTime   @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id])
+  leases   Lease[]
+}
+
+model Lease {
+  id              Int         @id @default(autoincrement())
+  tenantId        Int
+  unitId          Int
+  startDate       DateTime    @db.Date
+  endDate         DateTime    @db.Date
+  monthlyRent     Decimal     @db.Decimal(10, 2)
+  securityDeposit Decimal     @db.Decimal(10, 2)
+  leaseStatus     LeaseStatus
+  createdAt       DateTime    @default(now())
+
+  tenant   User      @relation(fields: [tenantId], references: [id])
+  unit     Unit      @relation(fields: [unitId], references: [id])
+  payments Payment[]
+}
+
+model Payment {
+  id            Int           @id @default(autoincrement())
+  leaseId       Int
+  amount        Decimal       @db.Decimal(10, 2)
+  paymentDate   DateTime      @db.Date
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus
+  transactionId String?
+  lateFee       Decimal?      @db.Decimal(10, 2)
+  createdAt     DateTime      @default(now())
+
+  lease Lease @relation(fields: [leaseId], references: [id])
+}
+
+model PropertyImage {
+  id         Int     @id @default(autoincrement())
+  propertyId Int
+  imageUrl   String
+  isCover    Boolean @default(false)
+
+  property Property @relation(fields: [propertyId], references: [id])
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
