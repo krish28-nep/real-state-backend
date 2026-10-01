@@ -56,6 +56,12 @@ enum PaymentStatus {
   FAILED
 }
 
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   fullName     String
@@ -70,6 +76,7 @@ model User {
 
   properties    Property[]
   leases        Lease[]
+  applications  RentalApplication[]
   notifications Notification[]
 }
 
@@ -107,6 +114,20 @@ model Unit {
 
   property Property @relation(fields: [propertyId], references: [id])
   leases   Lease[]
+  applications RentalApplication[]
+}
+
+model RentalApplication {
+  id        Int               @id @default(autoincrement())
+  tenantId  Int
+  unitId    Int
+  message   String?
+  status    ApplicationStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  tenant User @relation(fields: [tenantId], references: [id])
+  unit   Unit @relation(fields: [unitId], references: [id])
 }
 
 model Lease {
