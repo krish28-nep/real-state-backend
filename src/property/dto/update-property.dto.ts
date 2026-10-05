@@ -37,4 +37,8 @@ export class UpdatePropertyDTO {
     @IsOptional()
     @IsEnum(PropertyStatus)
     status?: PropertyStatus
+
+    @IsOptional()
+    @IsString()
+    coverImage?: string | null
 }

@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
-import { FilesInterceptor } from "@nestjs/platform-express";
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { PropertyService } from "./property.service";
 import { CreatePropertyDTO } from "./dto/create-property.dto";
 import { UpdatePropertyDTO } from "./dto/update-property.dto";
+import { SearchPropertyDTO } from "./dto/search-property.dto";
 import { JwtAuthGuard } from "src/auth/guards/jwt-auth.guard";
 import type { RequestWithUser } from "src/auth/interface/request-with-user.interface";
 
@@ -31,50 +32,24 @@ export class PropertyController {
     }
 
     @UseGuards(JwtAuthGuard)
-    @Post(':id/images')
+    @Post(':id/cover-image')
     @UseInterceptors(
-        FilesInterceptor('images', 10, {
-            limits: {
-                fileSize: 10 * 1024 * 1024,
-            },
+        FileInterceptor('image', {
+            limits: { fileSize: 10 * 1024 * 1024 },
             fileFilter: (req, file, callback) => {
                 if (!file.mimetype.startsWith('image/')) {
-                    return callback(
-                        new Error('Only image files are allowed'),
-                        false,
-                    );
+                    return callback(new Error('Only image files are allowed'), false);
                 }
-
                 callback(null, true);
             },
         }),
     )
-    async uploadImages(
+    async uploadCoverImage(
         @Param('id') id: string,
-        @UploadedFiles() files: Express.Multer.File[],
+        @UploadedFile() file: Express.Multer.File,
         @Req() req: RequestWithUser
     ) {
-        return this.propertyService.uploadPropertyImages(Number(id), req.user.sub, files)
-    }
-
-    @UseGuards(JwtAuthGuard)
-    @Delete(':propertyId/images/:imageId')
-    async deleteImage(
-        @Param('propertyId') propertyId: string,
-        @Param('imageId') imageId: string,
-        @Req() req: RequestWithUser
-    ) {
-        return this.propertyService.deletePropertyImage(Number(propertyId), Number(imageId), req.user.sub)
-    }
-
-    @UseGuards(JwtAuthGuard)
-    @Patch(':propertyId/images/:imageId/cover')
-    async setCoverImage(
-        @Param('propertyId') propertyId: string,
-        @Param('imageId') imageId: string,
-        @Req() req: RequestWithUser
-    ) {
-        return this.propertyService.setCoverImage(Number(propertyId), Number(imageId), req.user.sub)
+        return this.propertyService.uploadCoverImage(Number(id), req.user.sub, file)
     }
 
     @Get(':id')
@@ -83,8 +58,7 @@ export class PropertyController {
     }
 
     @Get()
-    async findAll(
-    ) {
-        return this.propertyService.findAll()
+    async findAll(@Query() query: SearchPropertyDTO) {
+        return this.propertyService.findAll(query)
     }
 }

@@ -1,4 +1,4 @@
-import { IsEnum, IsString } from "class-validator";
+import { IsEnum, IsOptional, IsString } from "class-validator";
 import { PropertyStatus, PropertyType } from "prisma/generated/enums";
 
 export class CreatePropertyDTO {
@@ -28,4 +28,8 @@ export class CreatePropertyDTO {
 
     @IsEnum(PropertyStatus)
     status: PropertyStatus
+
+    @IsOptional()
+    @IsString()
+    coverImage?: string | null
 }

@@ -1,16 +1,17 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PropertyRepository } from "./property.repository";
 import { CreatePropertyDTO } from "./dto/create-property.dto";
 import { UpdatePropertyDTO } from "./dto/update-property.dto";
-import { Property, PropertyImage } from "prisma/generated/client";
+import { Property } from "prisma/generated/client";
 import { UploadService } from "src/upload/upload.service";
-import multer from 'multer';
+import { PropertyStatus, PropertyType } from "prisma/generated/enums";
+import { SearchPropertyDTO } from "./dto/search-property.dto";
 
 @Injectable()
 export class PropertyService {
     constructor(
         private readonly propertyRepository: PropertyRepository,
-        private readonly uploadService: UploadService
+        private readonly uploadService: UploadService,
     ) { }
 
     async createProperty(ownerId: number, dto: CreatePropertyDTO): Promise<Property> {
@@ -33,84 +34,57 @@ export class PropertyService {
         return this.propertyRepository.updateProperty(id, dto)
     }
 
-    async uploadPropertyImages(id: number, ownerId: number, files: Express.Multer.File[]): Promise<PropertyImage[]> {
+    async uploadCoverImage(id: number, ownerId: number, file: Express.Multer.File): Promise<Property> {
         const property = await this.propertyRepository.findById(id)
         if (!property) {
             throw new NotFoundException('Property not found')
         }
 
         if (property.ownerId !== ownerId) {
-            throw new ForbiddenException('You can only upload images to your own property')
+            throw new ForbiddenException('You can only update your own property')
         }
 
-        const uploadResult = await this.uploadService.uploadImages(files)
-        const coverImage = await this.propertyRepository.findCoverImageByPropertyId(id)
+        const uploaded = await this.uploadService.uploadImage(file)
+        const updatedProperty = await this.propertyRepository.updateCoverImage(id, uploaded.url)
 
-        return this.propertyRepository.createPropertyImages(
-            id,
-            uploadResult.images.map((image, index) => ({
-                imageUrl: image.url,
-                isCover: !coverImage && index === 0
-            }))
-        )
-    }
-
-    async deletePropertyImage(propertyId: number, imageId: number, ownerId: number) {
-        const property = await this.propertyRepository.findById(propertyId)
-        if (!property) {
-            throw new NotFoundException('Property not found')
+        if (property.coverImage?.startsWith('/uploads/')) {
+            await this.uploadService.deleteImage(property.coverImage)
         }
 
-        if (property.ownerId !== ownerId) {
-            throw new ForbiddenException('You can only delete images from your own property')
-        }
-
-        const image = await this.propertyRepository.findImageById(imageId)
-        if (!image || image.propertyId !== propertyId) {
-            throw new NotFoundException('Image not found')
-        }
-
-        await this.propertyRepository.deletePropertyImage(imageId)
-        await this.uploadService.deleteImage(image.imageUrl)
-
-        if (image.isCover) {
-            const nextImage = await this.propertyRepository.findFirstImageByPropertyId(propertyId)
-
-            if (nextImage) {
-                await this.propertyRepository.updatePropertyImage(nextImage.id, {
-                    isCover: true
-                })
-            }
-        }
-
-        return {
-            message: 'Image deleted successfully'
-        }
-    }
-
-    async setCoverImage(propertyId: number, imageId: number, ownerId: number): Promise<PropertyImage> {
-        const property = await this.propertyRepository.findById(propertyId)
-        if (!property) {
-            throw new NotFoundException('Property not found')
-        }
-
-        if (property.ownerId !== ownerId) {
-            throw new ForbiddenException('You can only update images from your own property')
-        }
-
-        const image = await this.propertyRepository.findImageById(imageId)
-        if (!image || image.propertyId !== propertyId) {
-            throw new NotFoundException('Image not found')
-        }
-
-        return this.propertyRepository.setCoverImage(propertyId, imageId)
+        return updatedProperty
     }
 
     async findById(id: number): Promise<Property | null> {
         return this.propertyRepository.findById(id)
     }
 
-    async findAll(): Promise<Property[]> {
-        return this.propertyRepository.findAll()
+    async findAll(query: SearchPropertyDTO = {}): Promise<Property[]> {
+        for (const [key, value] of Object.entries(query)) {
+            if (value !== undefined && typeof value !== 'string') {
+                throw new BadRequestException(`${key} must be a string`);
+            }
+        }
+
+        const title = query.title?.trim() || undefined;
+        const ownerId = query.ownerId === undefined ? undefined : Number(query.ownerId);
+
+        if (ownerId !== undefined && (!Number.isInteger(ownerId) || ownerId < 1)) {
+            throw new BadRequestException('ownerId must be a positive integer');
+        }
+
+        if (query.status && !Object.values(PropertyStatus).includes(query.status as PropertyStatus)) {
+            throw new BadRequestException('status must be a valid property status');
+        }
+
+        if (query.propertyType && !Object.values(PropertyType).includes(query.propertyType as PropertyType)) {
+            throw new BadRequestException('propertyType must be a valid property type');
+        }
+
+        return this.propertyRepository.findAll({
+            title,
+            ownerId,
+            status: query.status as PropertyStatus | undefined,
+            propertyType: query.propertyType as PropertyType | undefined,
+        });
     }
 }

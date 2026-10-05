@@ -2,7 +2,15 @@ import { Injectable } from "@nestjs/common";
 import { PrismaService } from "prisma/prisma.service";
 import { createPropertyData } from "./interface/create-property.interface";
 import { UpdatePropertyDTO } from "./dto/update-property.dto";
-import { Property, PropertyImage } from "prisma/generated/client";
+import { Property } from "prisma/generated/client";
+import { PropertyStatus, PropertyType } from "prisma/generated/enums";
+
+type PropertyFilters = {
+    title?: string;
+    ownerId?: number;
+    status?: PropertyStatus;
+    propertyType?: PropertyType;
+};
 
 @Injectable()
 export class PropertyRepository {
@@ -20,67 +28,21 @@ export class PropertyRepository {
         return this.prisma.property.findUnique({ where: { id } })
     }
 
-    findAll(): Promise<Property[]> {
-        return this.prisma.property.findMany()
-    }
-
-    findCoverImageByPropertyId(propertyId: number): Promise<PropertyImage | null> {
-        return this.prisma.propertyImage.findFirst({
+    findAll(filters: PropertyFilters = {}): Promise<Property[]> {
+        return this.prisma.property.findMany({
             where: {
-                propertyId,
-                isCover: true
-            }
+                ...(filters.title ? { title: { contains: filters.title, mode: 'insensitive' } } : {}),
+                ...(filters.ownerId !== undefined ? { ownerId: filters.ownerId } : {}),
+                ...(filters.status ? { status: filters.status } : {}),
+                ...(filters.propertyType ? { propertyType: filters.propertyType } : {}),
+            },
         })
     }
 
-    createPropertyImages(
-        propertyId: number,
-        images: { imageUrl: string; isCover: boolean }[]
-    ): Promise<PropertyImage[]> {
-        return Promise.all(
-            images.map((image) =>
-                this.prisma.propertyImage.create({
-                    data: {
-                        propertyId,
-                        imageUrl: image.imageUrl,
-                        isCover: image.isCover
-                    }
-                })
-            )
-        )
-    }
-
-    findImageById(id: number): Promise<PropertyImage | null> {
-        return this.prisma.propertyImage.findUnique({ where: { id } })
-    }
-
-    findFirstImageByPropertyId(propertyId: number): Promise<PropertyImage | null> {
-        return this.prisma.propertyImage.findFirst({
-            where: { propertyId },
-            orderBy: { id: 'asc' }
+    updateCoverImage(id: number, coverImage: string): Promise<Property> {
+        return this.prisma.property.update({
+            where: { id },
+            data: { coverImage },
         })
-    }
-
-    updatePropertyImage(id: number, data: Partial<PropertyImage>): Promise<PropertyImage> {
-        return this.prisma.propertyImage.update({ where: { id }, data })
-    }
-
-    deletePropertyImage(id: number): Promise<PropertyImage> {
-        return this.prisma.propertyImage.delete({ where: { id } })
-    }
-
-    async setCoverImage(propertyId: number, imageId: number): Promise<PropertyImage> {
-        const [, image] = await this.prisma.$transaction([
-            this.prisma.propertyImage.updateMany({
-                where: { propertyId },
-                data: { isCover: false }
-            }),
-            this.prisma.propertyImage.update({
-                where: { id: imageId },
-                data: { isCover: true }
-            })
-        ])
-
-        return image
     }
 }

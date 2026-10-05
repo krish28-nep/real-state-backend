@@ -18,7 +18,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 const REFRESH_COOKIE_NAME = 'refreshToken';
 
-const REFRESH_COOKIE_PATH = '/auth/refresh';
+const REFRESH_COOKIE_PATH = '/';
 const REFRESH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 @Controller('auth')

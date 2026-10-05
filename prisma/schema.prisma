@@ -92,12 +92,12 @@ model Property {
   country      String
   postalCode   String
   status       PropertyStatus
+  coverImage   String?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
   owner  User            @relation(fields: [ownerId], references: [id])
   units  Unit[]
-  images PropertyImage[]
 }
 
 model Unit {
@@ -113,6 +113,7 @@ model Unit {
   createdAt  DateTime   @default(now())
 
   property Property @relation(fields: [propertyId], references: [id])
+  images   UnitImage[]
   leases   Lease[]
   applications RentalApplication[]
 }
@@ -160,13 +161,16 @@ model Payment {
   lease Lease @relation(fields: [leaseId], references: [id])
 }
 
-model PropertyImage {
-  id         Int     @id @default(autoincrement())
-  propertyId Int
-  imageUrl   String
-  isCover    Boolean @default(false)
+model UnitImage {
+  id        Int     @id @default(autoincrement())
+  unitId    Int
+  imageUrl  String
+  isCover   Boolean @default(false)
 
-  property Property @relation(fields: [propertyId], references: [id])
+  unit Unit @relation(fields: [unitId], references: [id])
+
+  @@index([unitId])
+  // A partial unique index in the migration enforces at most one cover per unit.
 }
 
 model Notification {

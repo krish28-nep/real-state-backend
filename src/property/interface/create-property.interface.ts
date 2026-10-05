@@ -11,4 +11,5 @@ export interface createPropertyData {
     country: string;
     postalCode: string
     status: PropertyStatus
+    coverImage?: string | null
 }
