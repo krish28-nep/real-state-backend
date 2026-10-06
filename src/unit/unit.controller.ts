@@ -3,7 +3,7 @@ import { FilesInterceptor } from "@nestjs/platform-express";
 import { UnitService } from "./unit.service";
 import { CreateUnitDTO } from "./dto/create-unit.dto";
 import { UpdateUnitDTO } from "./dto/update-unit.dto";
-import { SearchUnitDTO } from "./dto/search-unit.dto";
+import { SearchPublicUnitDTO, SearchUnitDTO } from "./dto/search-unit.dto";
 import { JwtAuthGuard } from "src/auth/guards/jwt-auth.guard";
 import type { RequestWithUser } from "src/auth/interface/request-with-user.interface";
 
@@ -28,6 +28,12 @@ export class UnitController {
         @Req() req: RequestWithUser
     ) {
         return this.unitService.updateUnit(Number(id), req.user.sub, dto)
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Delete(':id')
+    async delete(@Param('id') id: string, @Req() req: RequestWithUser) {
+        return this.unitService.deleteUnit(Number(id), req.user.sub)
     }
 
     @UseGuards(JwtAuthGuard)
@@ -71,6 +77,11 @@ export class UnitController {
         return this.unitService.setUnitCoverImage(Number(unitId), Number(imageId), req.user.sub)
     }
 
+    @Get('public')
+    async findPublic(@Query() query: SearchPublicUnitDTO) {
+        return this.unitService.findPublic(query)
+    }
+
     @Get(':id/images')
     async getImages(@Param('id') id: string) {
         return this.unitService.findUnitImages(Number(id))
@@ -82,7 +93,8 @@ export class UnitController {
     }
 
     @Get()
-    async findAll(@Query() query: SearchUnitDTO) {
-        return this.unitService.findAll(query)
+    @UseGuards(JwtAuthGuard)
+    async findAll(@Query() query: SearchUnitDTO, @Req() req: RequestWithUser) {
+        return this.unitService.findAll(req.user.sub, query)
     }
 }

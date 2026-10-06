@@ -1,11 +1,14 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
+import { static as serveStatic } from 'express';
+import { join } from 'path';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(cookieParser());
+  app.use('/uploads', serveStatic(join(process.cwd(), 'uploads')));
 
   app.enableCors({
     origin: 'http://localhost:3000', // your frontend origin

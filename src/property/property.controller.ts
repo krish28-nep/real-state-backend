@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { PropertyService } from "./property.service";
 import { CreatePropertyDTO } from "./dto/create-property.dto";
@@ -29,6 +29,12 @@ export class PropertyController {
         @Req() req: RequestWithUser
     ) {
         return this.propertyService.updateProperty(Number(id), req.user.sub, dto)
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Delete(':id')
+    async delete(@Param('id') id: string, @Req() req: RequestWithUser) {
+        return this.propertyService.deleteProperty(Number(id), req.user.sub)
     }
 
     @UseGuards(JwtAuthGuard)

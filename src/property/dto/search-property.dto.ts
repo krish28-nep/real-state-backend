@@ -3,4 +3,6 @@ export class SearchPropertyDTO {
     status?: string;
     ownerId?: string;
     propertyType?: string;
+    page?: string;
+    pageSize?: string;
 }

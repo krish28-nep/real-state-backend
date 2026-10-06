@@ -1,11 +1,11 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { UnitRepository } from "./unit.repository";
 import { CreateUnitDTO } from "./dto/create-unit.dto";
 import { UpdateUnitDTO } from "./dto/update-unit.dto";
 import { Unit, UnitImage } from "prisma/generated/client";
 import { UploadService } from "src/upload/upload.service";
-import { UnitStatus } from "prisma/generated/enums";
-import { SearchUnitDTO } from "./dto/search-unit.dto";
+import { PropertyType, UnitStatus } from "prisma/generated/enums";
+import { SearchPublicUnitDTO, SearchUnitDTO } from "./dto/search-unit.dto";
 
 @Injectable()
 export class UnitService {
@@ -51,11 +51,26 @@ export class UnitService {
         return this.unitRepository.updateUnit(id, dto)
     }
 
+    async deleteUnit(id: number, ownerId: number) {
+        const unit = await this.unitRepository.findById(id);
+        if (!unit) throw new NotFoundException('Unit not found');
+        if (unit.property.ownerId !== ownerId) throw new ForbiddenException('You can only delete your own units');
+
+        const constraints = await this.unitRepository.findDeleteConstraints(id);
+        if (constraints?._count.leases || constraints?._count.applications) {
+            throw new ConflictException('This unit has leases or applications and cannot be deleted');
+        }
+
+        const imageUrls = await this.unitRepository.deleteUnit(id);
+        await Promise.allSettled(imageUrls.map((url) => this.uploadService.deleteImage(url)));
+        return { message: 'Unit deleted successfully' };
+    }
+
     async findById(id: number): Promise<Unit | null> {
         return this.unitRepository.findById(id)
     }
 
-    async findAll(query: SearchUnitDTO = {}): Promise<Unit[]> {
+    async findAll(ownerId: number, query: SearchUnitDTO = {}) {
         for (const [key, value] of Object.entries(query)) {
             if (value !== undefined && typeof value !== 'string') {
                 throw new BadRequestException(`${key} must be a string`);
@@ -71,11 +86,69 @@ export class UnitService {
             throw new BadRequestException('status must be a valid unit status');
         }
 
-        return this.unitRepository.findAll({
+        const page = this.parsePositiveInteger(query.page, 'page');
+        const pageSize = this.parsePositiveInteger(query.pageSize, 'pageSize');
+        if ((page === undefined) !== (pageSize === undefined)) {
+            throw new BadRequestException('page and pageSize must be provided together');
+        }
+
+        const filters = {
+            ownerId,
             propertyId,
             unitNumber: query.unitNumber?.trim() || undefined,
             status: query.status as UnitStatus | undefined,
-        });
+        };
+        return page !== undefined && pageSize !== undefined
+            ? this.unitRepository.findPage(filters, page, pageSize)
+            : this.unitRepository.findAll(filters);
+    }
+
+    private parsePositiveInteger(value: string | undefined, field: string): number | undefined {
+        if (value === undefined) return undefined;
+        const parsed = Number(value);
+        if (!Number.isInteger(parsed) || parsed < 1 || (field === 'pageSize' && parsed > 100)) {
+            throw new BadRequestException(`${field} must be a positive integer${field === 'pageSize' ? ' no greater than 100' : ''}`);
+        }
+        return parsed;
+    }
+
+    async findPublic(query: SearchPublicUnitDTO) {
+        for (const [key, value] of Object.entries(query)) {
+            if (value !== undefined && typeof value !== 'string') {
+                throw new BadRequestException(`${key} must be a string`);
+            }
+        }
+
+        const requestedTypes = query.propertyTypes?.split(',').map((value) => value.trim()).filter(Boolean) ?? [];
+        const validTypes = Object.values(PropertyType) as string[];
+        if (requestedTypes.some((type) => !validTypes.includes(type))) {
+            throw new BadRequestException('propertyTypes must contain valid property types');
+        }
+
+        const maxRent = query.maxRent === undefined || query.maxRent === '' ? undefined : Number(query.maxRent);
+        if (maxRent !== undefined && (!Number.isFinite(maxRent) || maxRent < 0)) {
+            throw new BadRequestException('maxRent must be a non-negative number');
+        }
+        const bedroomsMin = query.bedroomsMin === undefined || query.bedroomsMin === '' ? undefined : Number(query.bedroomsMin);
+        if (bedroomsMin !== undefined && (!Number.isInteger(bedroomsMin) || bedroomsMin < 0)) {
+            throw new BadRequestException('bedroomsMin must be a non-negative integer');
+        }
+
+        const page = this.parsePositiveInteger(query.page, 'page') ?? 1;
+        const pageSize = this.parsePositiveInteger(query.pageSize, 'pageSize') ?? 9;
+        if (pageSize > 100) throw new BadRequestException('pageSize must be no greater than 100');
+        const propertyId = query.propertyId === undefined ? undefined : Number(query.propertyId);
+        if (propertyId !== undefined && (!Number.isInteger(propertyId) || propertyId < 1)) {
+            throw new BadRequestException('propertyId must be a positive integer');
+        }
+
+        return this.unitRepository.findPublicPage({
+            propertyId,
+            search: query.search?.trim() || undefined,
+            propertyTypes: requestedTypes as PropertyType[],
+            maxRent: maxRent || undefined,
+            bedroomsMin: bedroomsMin || undefined,
+        }, page, pageSize);
     }
 
     async findUnitImages(id: number): Promise<UnitImage[]> {
